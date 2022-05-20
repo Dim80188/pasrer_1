@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import aiohttp
 import asyncio
 import time
-
+import json
 
 start_time = time.time()
 
@@ -33,7 +33,7 @@ async def get_all(session, url, cat=None):
 def parse_1(result):
     for html in result:
         soup = BeautifulSoup(html, 'lxml')
-        all_products_hrefs = soup.find_all(class_='mzr-tc-group-item-href') #[:1]
+        all_products_hrefs = soup.find_all(class_='mzr-tc-group-item-href')#[:2]
         all_href_categories_list = []
         all_categories_dict = {}
         for item in all_products_hrefs:
@@ -60,9 +60,8 @@ def parse_2(dict_res):
             rep_1 = [",", " ", "-", "'", "/", "\n"]
             for i in rep_1:
                 if i in product_name:
-                    product_name_1 = product_name.replace(i, "_").strip()
-            a = '\\n'
-            product_name = product_name_1[:a]
+                    product_name = product_name.replace(i, "_").strip()
+
             product_name = product_name.rstrip()
 
             product_href = 'https://health-diet.ru' + table_i[0].find('a').get('href')
@@ -70,6 +69,25 @@ def parse_2(dict_res):
             # all_product_href_list.append(product_href)
         all_cat_and_href_products_dict[cat] = product_dict
     return all_cat_and_href_products_dict
+
+def parse_3(dict_res):
+
+    product_dict = {}
+    for product, html in dict_res.items():
+        soup = BeautifulSoup(str(html), 'lxml')
+
+        data_head = soup.find('div', class_='mzr-block-content uk-margin-bottom')
+
+
+        table = data_head.find('table', class_='mzr-table mzr-table-border mzr-tc-chemical-table').find_all('tr')[1:]
+        product_info = {}
+        for item_i in table:
+            item = item_i.find_all('td')
+            a = item[0].text
+            b = item[1].text
+            product_info[a] = b
+        # product_dict[product] = product_info
+    return product_info
 
 
 async def main(url, cat=None):
@@ -81,7 +99,27 @@ if __name__ == '__main__':
     result = asyncio.run(main(url))
 
     all_category = parse_1(result)
-    print(all_category)
+    # print(all_category)
+    all_data = []
     for cat, url in all_category.items():
         result_1 = asyncio.run(main(url, cat))
-        print(parse_2(result_1))
+        all_data.append(parse_2(result_1))
+    # print(all_data)
+    all_product_dict = {}
+    count = 0
+    for categories in all_data:
+        product_from_cat = {}
+        for cat_name, products in categories.items():
+            for cat_1, url_1 in products.items():
+
+                result_2 = asyncio.run(main(url_1, cat_1))
+
+                products_cat = parse_3(result_2)
+                count += 1
+                print(f'product{count}')
+
+                product_from_cat[cat_1] = products_cat
+            all_product_dict[cat_name] = product_from_cat
+
+    with open('data.json', 'w') as file:
+        json.dump(all_product_dict, file, indent=4, ensure_ascii=False)
